@@ -55,6 +55,12 @@ const menu = (lang) => ({
     ]),
     [
       {
+        text: lang === "am" ? "📝 የጤና መረጃ ቅጽ" : "📝 Health information form",
+        web_app: { url: `https://tesfacare-bot.netlify.app/intake.html?lang=${lang}` },
+      },
+    ],
+    [
+      {
         text: lang === "am" ? "🤰 የእርግዝና ማስያ" : "🤰 Pregnancy calculator",
         web_app: { url: `https://tesfacare-bot.netlify.app/calculator.html?lang=${lang}` },
       },
