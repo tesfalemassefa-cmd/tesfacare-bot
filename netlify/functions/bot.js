@@ -49,9 +49,17 @@ const T = {
 };
 
 const menu = (lang) => ({
-  inline_keyboard: ["danger", "anc", "habits", "ebook", "talk"].map((k) => [
-    { text: T[lang]["b_" + k], callback_data: `${k}:${lang}` },
-  ]),
+  inline_keyboard: [
+    ...["danger", "anc", "habits", "ebook", "talk"].map((k) => [
+      { text: T[lang]["b_" + k], callback_data: `${k}:${lang}` },
+    ]),
+    [
+      {
+        text: lang === "am" ? "🤰 የእርግዝና ማስያ" : "🤰 Pregnancy calculator",
+        web_app: { url: `https://tesfacare-bot.netlify.app/calculator.html?lang=${lang}` },
+      },
+    ],
+  ],
 });
 
 const back = (lang) => ({
