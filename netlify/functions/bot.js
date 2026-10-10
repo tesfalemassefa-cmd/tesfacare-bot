@@ -7,13 +7,6 @@ exports.handler = async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (event.httpMethod === "GET") {
-    const r = await api("sendMessage", { chat_id: DOCTOR, text: "Test from TesfaCare bot" });
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ tokenSet: !!TOKEN, doctorId: DOCTOR, telegram: await r.json() }),
-    };
-  }
   try {
     const msg = JSON.parse(event.body || "{}").message;
     if (!msg) return { statusCode: 200, body: "ok" };
