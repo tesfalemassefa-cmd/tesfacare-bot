@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TesfaCare</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  body{margin:0;padding:16px;font-family:system-ui,sans-serif;background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color,#222)}
+  h1{font-size:20px;margin:0 0 8px}
+  h2{font-size:16px;margin:20px 0 8px}
+  label{display:block;font-size:14px;margin:14px 0 6px}
+  select{padding:10px 4px;font-size:15px;border-radius:10px;border:1px solid #bbb;background:var(--tg-theme-secondary-bg-color,#f4f4f5);color:inherit;min-width:0;width:100%}
+  .dates{display:flex;gap:6px}
+  .dates select{flex:1}
+  .three select:nth-child(2){flex:2.4}
+  .seg{display:flex;gap:6px}
+  .seg button{flex:1;padding:10px 6px;font-size:14px;border-radius:10px;border:1px solid #bbb;background:var(--tg-theme-secondary-bg-color,#f4f4f5);color:inherit}
+  .seg button.on{background:var(--tg-theme-button-color,#2a9d8f);color:var(--tg-theme-button-text-color,#fff);border-color:transparent}
+  .main{width:100%;margin-top:18px;padding:14px;font-size:16px;border:0;border-radius:10px;background:var(--tg-theme-button-color,#2a9d8f);color:var(--tg-theme-button-text-color,#fff)}
+  .gray{background:#888}
+  .card{margin-top:12px;padding:12px;border-radius:12px;background:var(--tg-theme-secondary-bg-color,#f4f4f5)}
+  .hero{text-align:center}
+  .big{font-size:30px;font-weight:700;margin-bottom:4px}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:8px 6px;border-bottom:1px solid rgba(128,128,128,.25);font-size:14px}
+  .row:last-child{border-bottom:0}
+  .row b{text-align:right;font-weight:600}
+  .row small{opacity:.7;font-weight:400}
+  .past{opacity:.55}
+  .cur{background:rgba(42,157,143,.18);border-radius:8px}
+  .err{margin-top:14px;color:#c0392b}
+  .note{margin-top:14px;font-size:13px;opacity:.75}
+</style>
+</head>
+<body>
+<h1 id="title"></h1>
+
+<label id="lblMethod"></label>
+<div class="seg"><button id="mLmp"></button><button id="mUs"></button></div>
+
+<label id="lblCal"></label>
+<div class="seg"><button id="cEth"></button><button id="cGreg"></button></div>
+
+<div id="boxLmp">
+  <label id="lblLmp"></label>
+  <div class="dates three"><select id="lmp_d"></select><select id="lmp_m"></select><select id="lmp_y"></select></div>
+  <label id="lblCycle"></label>
+  <select id="cycle"></select>
+</div>
+
+<div id="boxUs" style="display:none">
+  <label id="lblScan"></label>
+  <div class="dates three"><select id="scan_d"></select><select id="scan_m"></select><select id="scan_y"></select></div>
+  <label id="lblGa"></label>
+  <div class="dates"><select id="gaW"></select><select id="gaD"></select></div>
+</div>
+
+<button class="main" id="go"></button>
+<div id="out"></div>
+<button class="main gray" id="close"></button>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+const lang = new URLSearchParams(location.search).get("lang") === "am" ? "am" : "en";
+
+const L = {
+  am: {
+    title: "🤰 የእርግዝና ማስያ",
+    method: "በምን ማስላት ይፈልጋሉ?", mLmp: "በመጨረሻ የወር አበባ", mUs: "ከአልትራሳውንድ",
+    cal: "የቀን አቆጣጠር", cEth: "ኢትዮጵያ", cGreg: "ግሪጎሪያን",
+    lmp: "የመጨረሻው የወር አበባ የጀመረበት ቀን",
+    cycle: "የወር አበባ ዑደት ርዝመት (ቀን)",
+    scan: "አልትራሳውንዱ የተነሳበት ቀን (ዛሬ ከሆነ እንዳለ ይተዉት)",
+    ga: "በአልትራሳውንድ የተገኘ እድሜ (እስከ 24 ሳምንት)",
+    w: "ሳምንት", d: "ቀን", wShort: "ሳምንት",
+    go: "አስላ", close: "ዝጋ",
+    ageText: (w, d) => `${w} ሳምንት ከ ${d} ቀን`,
+    mon: (n) => `${n}ኛ ወር`,
+    edd: "የመውለጃ ቀን (EDD)", left: "ለመውለድ የቀሩ ቀናት",
+    monthsTitle: "የእርግዝና ወራት በቀን", checkTitle: "አስፈላጊ ምርመራዎችና ክትትሎች",
+    t1: "የመጀመሪያ ሦስት ወር", t2: "ሁለተኛ ሦስት ወር", t3: "ሦስተኛ ሦስት ወር",
+    empty: "እባክዎ ሁሉንም መረጃ ይሙሉ።",
+    invalid: "ያስገቡት ቀን ትክክል አይደለም።",
+    future: "ቀኑ ወደፊት መሆን አይችልም።",
+    long: "ከ42 ሳምንት በላይ ሆኗል። ቀኑን ያረጋግጡ ወይም ጤና ባለሙያ ያማክሩ።",
+    note: "ይህ ግምት ነው። በጣም ትክክለኛው ቀን በቅድመ እርግዝና አልትራሳውንድ ይወሰናል። የምርመራ ጊዜዎች በጤና ባለሙያ ሊስተካከሉ ይችላሉ።",
+  },
+  en: {
+    title: "🤰 Pregnancy calculator",
+    method: "Calculate from", mLmp: "Last period (LMP)", mUs: "Early ultrasound",
+    cal: "Calendar", cEth: "Ethiopian", cGreg: "Gregorian",
+    lmp: "First day of your last period",
+    cycle: "Cycle length (days)",
+    scan: "Date of the ultrasound (leave as today if it is today)",
+    ga: "Age found on the ultrasound (up to 24 weeks)",
+    w: "weeks", d: "days", wShort: "w",
+    go: "Calculate", close: "Close",
+    ageText: (w, d) => `${w} weeks ${d} days`,
+    mon: (n) => `Month ${n}`,
+    edd: "Due date (EDD)", left: "Days until due date",
+    monthsTitle: "Pregnancy months by date", checkTitle: "Important tests and checkups",
+    t1: "First trimester", t2: "Second trimester", t3: "Third trimester",
+    empty: "Please fill in all the fields.",
+    invalid: "That date is not valid.",
+    future: "The date cannot be in the future.",
+    long: "More than 42 weeks. Please check the date or see a health worker.",
+    note: "This is an estimate. An early ultrasound gives the most accurate date. Timing of tests may be adjusted by your health worker.",
+  },
+}[lang];
+
+const ETH = {
+  am: ["መስከረም","ጥቅምት","ኅዳር","ታኅሣሥ","ጥር","የካቲት","መጋቢት","ሚያዝያ","ግንቦት","ሰኔ","ሐምሌ","ነሐሴ","ጳጉሜን"],
+  en: ["Meskerem","Tikimt","Hidar","Tahsas","Tir","Yekatit","Megabit","Miazia","Ginbot","Sene","Hamle","Nehase","Pagume"],
+};
+const GREG = {
+  am: ["ጃንዋሪ","ፌብሩዋሪ","ማርች","ኤፕሪል","ሜይ","ጁን","ጁላይ","ኦገስት","ሴፕቴምበር","ኦክቶበር","ኖቬምበር","ዲሴምበር"],
+  en: ["January","February","March","April","May","June","July","August","September","October","November","December"],
+};
+
+// ===== Checkups: edit here. f = start day, t = end day (W(weeks, days)) =====
+const W = (w, d = 0) => w * 7 + d;
+const MILESTONES = [
+  { f: W(0),  t: W(12),    wk: "≤12",   am: "የመጀመሪያ የቅድመ ወሊድ ክትትል",            en: "First antenatal visit" },
+  { f: W(11), t: W(13, 6), wk: "11–13", am: "የአንገት ጀርባ ውፍረት (NT) ምርመራ",          en: "NT scan (nuchal translucency)" },
+  { f: W(18), t: W(22, 6), wk: "18–22", am: "የጽንስ አካል አልትራሳውንድ (አናቶሚ ስካን)", en: "Anatomy scan" },
+  { f: W(24), t: W(28, 6), wk: "24–28", am: "የስኳር በሽታ ምርመራ",                      en: "Diabetes screening (glucose test)" },
+  { f: W(32), t: W(36),    wk: "32–36", am: "የጽንስ እድገትና አቀማመጥ ክትትል",          en: "Growth and baby's position check" },
+  { f: W(37), t: W(41),    wk: "37–41", am: "ሙሉ የእርግዝና ጊዜ",                         en: "Full term" },
+];
+// ==============================================================================
+
+// ----- Calendar math (Julian Day Numbers) -----
+const gregToJDN = (y, m, d) => {
+  const a = Math.floor((14 - m) / 12), yy = y + 4800 - a, mm = m + 12 * a - 3;
+  return d + Math.floor((153 * mm + 2) / 5) + 365 * yy + Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) - 32045;
+};
+const jdnToGreg = (j) => {
+  const a = j + 32044, b = Math.floor((4 * a + 3) / 146097), c = a - Math.floor(146097 * b / 4);
+  const d = Math.floor((4 * c + 3) / 1461), e = c - Math.floor(1461 * d / 4), m = Math.floor((5 * e + 2) / 153);
+  return { day: e - Math.floor((153 * m + 2) / 5) + 1, month: m + 3 - 12 * Math.floor(m / 10), year: 100 * b + d - 4800 + Math.floor(m / 10) };
+};
+const ethToJDN = (y, m, d) => 1723856 + 365 + 365 * (y - 1) + Math.floor(y / 4) + 30 * m + d - 31;
+const jdnToEth = (j) => {
+  const t = j - 1723856, r = t % 1461, n = (r % 365) + 365 * Math.floor(r / 1460);
+  return { year: 4 * Math.floor(t / 1461) + Math.floor(r / 365) - Math.floor(r / 1460), month: Math.floor(n / 30) + 1, day: (n % 30) + 1 };
+};
+
+let cal = lang === "am" ? "eth" : "greg";
+let method = "lmp";
+const now = new Date();
+const todayJDN = gregToJDN(now.getFullYear(), now.getMonth() + 1, now.getDate());
+const toP = (j, c = cal) => (c === "eth" ? jdnToEth(j) : jdnToGreg(j));
+const toJ = (y, m, d, c = cal) => (c === "eth" ? ethToJDN(y, m, d) : gregToJDN(y, m, d));
+const MN = (c = cal) => (c === "eth" ? ETH[lang] : GREG[lang]);
+const fmt = (j, c, withYear) => {
+  const p = toP(j, c);
+  let s = `${MN(c)[p.month - 1]} ${p.day}`;
+  if (withYear) s += c === "eth" ? (lang === "am" ? ` ${p.year} ዓ.ም` : `, ${p.year} EC`) : `, ${p.year}`;
+  return s;
+};
+
+// ----- Date inputs -----
+const opt = (v, t) => `<option value="${v}">${t}</option>`;
+function fillDate(id, jdn) {
+  const p = jdn == null ? null : toP(jdn);
+  const ty = toP(todayJDN).year;
+  const days = Array.from({ length: cal === "eth" ? 30 : 31 }, (_, i) => opt(i + 1, i + 1)).join("");
+  $(id + "_d").innerHTML = opt("", "—") + days;
+  $(id + "_m").innerHTML = opt("", "—") + MN().map((n, i) => opt(i + 1, n)).join("");
+  $(id + "_y").innerHTML = opt("", "—") + opt(ty - 1, ty - 1) + opt(ty, ty);
+  $(id + "_d").value = p ? p.day : "";
+  $(id + "_m").value = p ? p.month : "";
+  $(id + "_y").value = p ? p.year : "";
+}
+function readDate(id) {
+  const d = +$(id + "_d").value, m = +$(id + "_m").value, y = +$(id + "_y").value;
+  if (!d || !m || !y) return null;
+  const j = toJ(y, m, d), p = toP(j);
+  return p.year === y && p.month === m && p.day === d ? j : -1;
+}
+function setCal(c) {
+  const keep = ["lmp", "scan"].map((id) => { const j = readDate(id); return j > 0 ? j : null; });
+  cal = c;
+  fillDate("lmp", keep[0]);
+  fillDate("scan", keep[1]);
+  $("cEth").classList.toggle("on", c === "eth");
+  $("cGreg").classList.toggle("on", c === "greg");
+  $("out").innerHTML = "";
+}
+function setMethod(m) {
+  method = m;
+  $("mLmp").classList.toggle("on", m === "lmp");
+  $("mUs").classList.toggle("on", m === "us");
+  $("boxLmp").style.display = m === "lmp" ? "" : "none";
+  $("boxUs").style.display = m === "us" ? "" : "none";
+  $("out").innerHTML = "";
+}
+
+// ----- Labels and setup -----
+document.documentElement.lang = lang;
+$("title").textContent = L.title;
+$("lblMethod").textContent = L.method;
+$("mLmp").textContent = L.mLmp;
+$("mUs").textContent = L.mUs;
+$("lblCal").textContent = L.cal;
+$("cEth").textContent = L.cEth;
+$("cGreg").textContent = L.cGreg;
+$("lblLmp").textContent = L.lmp;
+$("lblCycle").textContent = L.cycle;
+$("lblScan").textContent = L.scan;
+$("lblGa").textContent = L.ga;
+$("go").textContent = L.go;
+$("close").textContent = L.close;
+$("cycle").innerHTML = Array.from({ length: 25 }, (_, i) => opt(21 + i, 21 + i)).join("");
+$("cycle").value = 28;
+$("gaW").innerHTML = opt("", "—") + Array.from({ length: 21 }, (_, i) => opt(4 + i, `${4 + i} ${L.w}`)).join("");
+$("gaD").innerHTML = Array.from({ length: 7 }, (_, i) => opt(i, `${i} ${L.d}`)).join("");
+$("close").onclick = () => (tg ? tg.close() : window.close());
+$("mLmp").onclick = () => setMethod("lmp");
+$("mUs").onclick = () => setMethod("us");
+$("cEth").onclick = () => setCal("eth");
+$("cGreg").onclick = () => setCal("greg");
+setCal(cal);
+fillDate("scan", todayJDN);
+setMethod("lmp");
+
+// ----- Calculate -----
+$("go").onclick = () => {
+  const err = (m) => { $("out").innerHTML = `<div class="err">${m}</div>`; };
+  let day0;
+  if (method === "lmp") {
+    const j = readDate("lmp");
+    if (j === null) return err(L.empty);
+    if (j === -1) return err(L.invalid);
+    day0 = j + (+$("cycle").value - 28);
+  } else {
+    const j = readDate("scan"), w = $("gaW").value;
+    if (j === null || w === "") return err(L.empty);
+    if (j === -1) return err(L.invalid);
+    if (j > todayJDN) return err(L.future);
+    day0 = j - (+w * 7 + +$("gaD").value);
+  }
+  const ga = todayJDN - day0;
+  if (ga < 0) return err(L.future);
+  if (ga > 294) return err(L.long);
+  render(day0, ga);
+};
+
+function render(day0, ga) {
+  const cw = Math.floor(ga / 7), dd = ga % 7;
+  const starts = [0, 5, 9, 14, 18, 23, 28, 32, 36];
+  let month = 1;
+  starts.forEach((s, i) => { if (cw >= s) month = i + 1; });
+  const stage = cw < 14 ? L.t1 : cw < 28 ? L.t2 : L.t3;
+  const edd = day0 + 280;
+  const left = Math.max(0, edd - todayJDN);
+  const other = cal === "eth" ? "greg" : "eth";
+  const D = (j, y) => fmt(j, cal, y);
+
+  const monthRows = starts.map((s, i) => {
+    const from = day0 + s * 7;
+    const to = i < 8 ? day0 + starts[i + 1] * 7 - 1 : edd;
+    const wk = `${s}–${i < 8 ? starts[i + 1] - 1 : 40}`;
+    return `<div class="row${i + 1 === month ? " cur" : ""}"><span>${L.mon(i + 1)} <small>(${wk} ${L.wShort})</small></span><b>${D(from)} – ${D(to)}</b></div>`;
+  }).join("");
+
+  const checkRows = MILESTONES.map((m) => {
+    const from = day0 + m.f, to = day0 + m.t;
+    const st = todayJDN > to ? "past" : todayJDN >= from ? "cur" : "";
+    return `<div class="row ${st}"><span>${st === "past" ? "✓ " : ""}${m[lang]} <small>(${m.wk} ${L.wShort})</small></span><b>${D(from)} – ${D(to)}${st === "cur" ? " ◀" : ""}</b></div>`;
+  }).join("");
+
+  $("out").innerHTML = `
+    <div class="card hero">
+      <div class="big">${L.mon(month)}</div>
+      <div>${L.ageText(cw, dd)} · ${stage}</div>
+    </div>
+    <div class="card">
+      <div class="row"><span>${L.edd}</span><b>${D(edd, true)}<br><small>${fmt(edd, other, true)}</small></b></div>
+      <div class="row"><span>${L.left}</span><b>${left}</b></div>
+    </div>
+    <h2>${L.monthsTitle}</h2><div class="card">${monthRows}</div>
+    <h2>${L.checkTitle}</h2><div class="card">${checkRows}</div>
+    <div class="note">${L.note}</div>`;
+}
+</script>
+</body>
+</html>
