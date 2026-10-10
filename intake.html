@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TesfaCare</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  body{margin:0;padding:16px;font-family:system-ui,sans-serif;background:var(--tg-theme-bg-color,#fff);color:var(--tg-theme-text-color,#222)}
+  h1{font-size:20px;margin:0 0 8px}
+  h2{font-size:15px;margin:18px 0 4px}
+  label{display:block;font-size:14px;margin:14px 0 6px}
+  input[type=text],input[type=number],select,textarea{width:100%;box-sizing:border-box;padding:11px;font-size:16px;border-radius:10px;border:1px solid #bbb;background:var(--tg-theme-secondary-bg-color,#f4f4f5);color:inherit;font-family:inherit}
+  .chk{display:flex;gap:10px;align-items:flex-start;margin:8px 0;font-size:15px}
+  .chk input{margin-top:3px;width:18px;height:18px;flex:none}
+  .main{width:100%;margin-top:18px;padding:14px;font-size:16px;border:0;border-radius:10px;background:var(--tg-theme-button-color,#2a9d8f);color:var(--tg-theme-button-text-color,#fff)}
+  .main:disabled{opacity:.6}
+  .note{font-size:13px;opacity:.75}
+  .err{color:#c0392b;margin-top:12px}
+  .warn{margin-top:14px;padding:12px;border-radius:12px;background:#fdecea;color:#7a1f16}
+  .ok{margin-top:14px;padding:12px;border-radius:12px;background:rgba(42,157,143,.18)}
+</style>
+</head>
+<body>
+<div id="app">
+  <h1 id="title"></h1>
+  <p class="note" id="intro"></p>
+
+  <label id="lName"></label>
+  <input type="text" id="name" maxlength="80">
+
+  <label id="lAge"></label>
+  <input type="number" id="age" inputmode="numeric" min="10" max="60">
+
+  <label id="lStatus"></label>
+  <select id="status"></select>
+
+  <div id="preg" style="display:none">
+    <label id="lWeeks"></label>
+    <select id="weeks"></select>
+    <label id="lPrev"></label>
+    <select id="prev"></select>
+    <label id="lCsec"></label>
+    <select id="csec"></select>
+    <h2 id="lDanger"></h2>
+    <div id="danger"></div>
+  </div>
+
+  <label id="lConcern"></label>
+  <textarea id="concern" rows="4" maxlength="800"></textarea>
+
+  <h2 id="lCond"></h2>
+  <div id="cond"></div>
+
+  <label id="lMeds"></label>
+  <input type="text" id="meds" maxlength="200">
+
+  <label class="chk"><input type="checkbox" id="consent"><span id="lConsent"></span></label>
+
+  <button class="main" id="send"></button>
+  <div id="msg"></div>
+</div>
+<div id="done" style="display:none"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) { tg.ready(); tg.expand(); }
+const lang = new URLSearchParams(location.search).get("lang") === "am" ? "am" : "en";
+
+const L = {
+  am: {
+    title: "📝 የጤና መረጃ ቅጽ",
+    intro: "ዶ/ር ተስፋዓለም በተሻለ እንዲረዱዎት መረጃዎን ይሙሉ። መረጃው ለዶክተሩ ብቻ ይላካል።",
+    name: "ስም", age: "ዕድሜ",
+    status: "አሁን ያሉበት ሁኔታ", choose: "ይምረጡ", sPreg: "ነፍሰ ጡር ነኝ", sNot: "ነፍሰ ጡር አይደለሁም",
+    weeks: "የእርግዝና ሳምንት (ካወቁ)", unknown: "አላውቅም", wUnit: "ሳምንት",
+    prev: "ከዚህ በፊት የነበሩ እርግዝናዎች ብዛት",
+    csec: "ከዚህ በፊት በቀዶ ሕክምና (ሲ/ሴክሽን) ወልደዋል?", no: "አይ", yes: "አዎ",
+    danger: "ከሚከተሉት አሁን ያጋጠመዎት አለ?",
+    concern: "ዋና ችግርዎ ወይም ጥያቄዎ",
+    cond: "ያለብዎት የጤና ችግር (ካለ ይምረጡ)",
+    meds: "የሚወስዱት መድኃኒት ወይም አለርጂ (ካለ)",
+    consent: "መረጃዬ ለዚህ ምክክር ብቻ ለዶ/ር ተስፋዓለም እንዲላክ እስማማለሁ።",
+    send: "ላክ", sending: "በመላክ ላይ...", close: "ዝጋ",
+    errFill: "እባክዎ ስም፣ ዕድሜ፣ ሁኔታና ዋና ችግርዎን ይሙሉ።",
+    errAge: "ዕድሜ ከ10 እስከ 60 መሆን አለበት።",
+    errConsent: "ለመቀጠል የስምምነት ሳጥኑን ምልክት ያድርጉ።",
+    errTg: "እባክዎ ቅጹን ከቦቱ ውስጥ ይክፈቱ።",
+    errSend: "መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ።",
+    doneTitle: "✅ መረጃዎ ደርሷል",
+    doneText: "ዶክተር ተስፋዓለም በዚሁ ቦት ውስጥ በቅርቡ ይመልሳሉ።",
+    urgent: "⚠️ ያመለከቱት ምልክት አደገኛ ሊሆን ይችላል። ሳይዘገዩ ወደ ቅርብ ጤና ተቋም ይሂዱ።",
+  },
+  en: {
+    title: "📝 Health information form",
+    intro: "Fill in your information so Dr. Tesfalem can help you better. It is sent to the doctor only.",
+    name: "Name", age: "Age",
+    status: "Your situation now", choose: "Choose", sPreg: "I am pregnant", sNot: "I am not pregnant",
+    weeks: "Weeks of pregnancy (if you know)", unknown: "I don't know", wUnit: "weeks",
+    prev: "Number of previous pregnancies",
+    csec: "Have you had a cesarean section before?", no: "No", yes: "Yes",
+    danger: "Do you have any of these now?",
+    concern: "Your main problem or question",
+    cond: "Health conditions you have (tick if any)",
+    meds: "Medicines you take or allergies (if any)",
+    consent: "I agree that my information is sent to Dr. Tesfalem for this consultation only.",
+    send: "Send", sending: "Sending...", close: "Close",
+    errFill: "Please fill in your name, age, situation and main problem.",
+    errAge: "Age must be between 10 and 60.",
+    errConsent: "Please tick the agreement box to continue.",
+    errTg: "Please open this form from the bot.",
+    errSend: "Could not send. Please try again.",
+    doneTitle: "✅ Your information was received",
+    doneText: "Dr. Tesfalem will reply soon in this bot.",
+    urgent: "⚠️ The signs you reported may be dangerous. Please go to the nearest health facility without delay.",
+  },
+}[lang];
+
+// k = text the doctor receives (English)
+const DANGER = [
+  { k: "Vaginal bleeding", am: "ከብልት ደም መፍሰስ", en: "Vaginal bleeding" },
+  { k: "Severe headache or blurred vision", am: "ከባድ ራስ ምታት ወይም የዓይን ብዥታ", en: "Severe headache or blurred vision" },
+  { k: "Swelling of face or hands", am: "የፊት ወይም የእጅ እብጠት", en: "Swelling of face or hands" },
+  { k: "Reduced or no baby movement", am: "የጽንስ እንቅስቃሴ መቀነስ ወይም መቆም", en: "Reduced or no baby movement" },
+  { k: "Leaking of fluid", am: "የውሃ መፍሰስ", en: "Leaking of fluid" },
+  { k: "Severe abdominal pain", am: "ከባድ የሆድ ሕመም", en: "Severe abdominal pain" },
+  { k: "Fever or convulsions", am: "ትኩሳት ወይም ማንዘፍዘፍ", en: "Fever or convulsions" },
+];
+const COND = [
+  { k: "High blood pressure", am: "የደም ግፊት", en: "High blood pressure" },
+  { k: "Diabetes", am: "የስኳር በሽታ", en: "Diabetes" },
+  { k: "Heart disease", am: "የልብ ሕመም", en: "Heart disease" },
+  { k: "Asthma", am: "አስም", en: "Asthma" },
+  { k: "Anemia", am: "የደም ማነስ", en: "Anemia" },
+  { k: "Other", am: "ሌላ", en: "Other" },
+];
+
+const opt = (v, t) => `<option value="${v}">${t}</option>`;
+const list = (id, items) => {
+  $(id).innerHTML = items.map((x) => `<label class="chk"><input type="checkbox" value="${x.k}"><span>${x[lang]}</span></label>`).join("");
+};
+const checked = (id) => [...document.querySelectorAll(`#${id} input:checked`)].map((i) => i.value);
+
+document.documentElement.lang = lang;
+$("title").textContent = L.title;
+$("intro").textContent = L.intro;
+$("lName").textContent = L.name;
+$("lAge").textContent = L.age;
+$("lStatus").textContent = L.status;
+$("lWeeks").textContent = L.weeks;
+$("lPrev").textContent = L.prev;
+$("lCsec").textContent = L.csec;
+$("lDanger").textContent = L.danger;
+$("lConcern").textContent = L.concern;
+$("lCond").textContent = L.cond;
+$("lMeds").textContent = L.meds;
+$("lConsent").textContent = L.consent;
+$("send").textContent = L.send;
+
+$("status").innerHTML = opt("", L.choose) + opt("pregnant", L.sPreg) + opt("not", L.sNot);
+$("weeks").innerHTML = opt("unknown", L.unknown) + Array.from({ length: 39 }, (_, i) => opt(4 + i, `${4 + i} ${L.wUnit}`)).join("");
+$("prev").innerHTML = Array.from({ length: 11 }, (_, i) => opt(i, i)).join("");
+$("csec").innerHTML = opt("no", L.no) + opt("yes", L.yes);
+list("danger", DANGER);
+list("cond", COND);
+
+if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.first_name) {
+  $("name").value = tg.initDataUnsafe.user.first_name;
+}
+$("status").onchange = () => { $("preg").style.display = $("status").value === "pregnant" ? "" : "none"; };
+
+function showDone(urgent) {
+  $("app").style.display = "none";
+  $("done").style.display = "";
+  $("done").innerHTML =
+    `<h1>${L.doneTitle}</h1><div class="ok">${L.doneText}</div>` +
+    (urgent ? `<div class="warn">${L.urgent}</div>` : "") +
+    `<button class="main" id="closeBtn">${L.close}</button>`;
+  $("closeBtn").onclick = () => (tg ? tg.close() : window.close());
+}
+
+$("send").onclick = async () => {
+  const err = (m) => { $("msg").className = "err"; $("msg").textContent = m; };
+  const name = $("name").value.trim();
+  const age = +$("age").value;
+  const status = $("status").value;
+  const concern = $("concern").value.trim();
+  if (!name || !age || !status || concern.length < 3) return err(L.errFill);
+  if (age < 10 || age > 60) return err(L.errAge);
+  if (!$("consent").checked) return err(L.errConsent);
+  if (!tg || !tg.initData) return err(L.errTg);
+
+  const pregnant = status === "pregnant";
+  const form = {
+    lang, name, age, status, concern,
+    weeks: pregnant ? $("weeks").value : "",
+    prev: pregnant ? $("prev").value : "",
+    csec: pregnant ? $("csec").value : "",
+    conditions: checked("cond"),
+    meds: $("meds").value.trim(),
+    danger: pregnant ? checked("danger") : [],
+  };
+
+  $("send").disabled = true;
+  $("send").textContent = L.sending;
+  $("msg").textContent = "";
+  try {
+    const r = await fetch("/.netlify/functions/intake", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData: tg.initData, form }),
+    });
+    if (!r.ok) throw new Error("status " + r.status);
+    showDone(form.danger.length > 0);
+  } catch (e) {
+    $("send").disabled = false;
+    $("send").textContent = L.send;
+    err(L.errSend);
+  }
+};
+</script>
+</body>
+</html>
